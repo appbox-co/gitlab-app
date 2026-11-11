@@ -1,0 +1,25 @@
+#!/bin/bash
+# Sends this container's installed callback once GitLab answers its health
+# check, then clears the pending flag. Started in the background by
+# appbox-post-reconfigure. If GitLab is still not healthy after 15 minutes
+# the callback is sent anyway, so the dashboard does not wait for ever.
+{ set +x; } 2>/dev/null
+set -u
+
+CALLBACK_PENDING=/etc/appbox_callback_pending
+
+for _ in $(seq 1 90); do
+    if /opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10 >/dev/null 2>&1; then
+        break
+    fi
+    sleep 10
+done
+
+if ! /opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10 >/dev/null 2>&1; then
+    echo "[appbox-callback] GitLab is not answering its health check; sending the installed callback anyway" >&2
+fi
+
+# The helper retries network errors, 408, 429 and 5xx and stops on any other
+# answer, so the flag is cleared after one accepted or rejected attempt.
+/scripts/appbox-installed-callback
+rm -f "${CALLBACK_PENDING}"

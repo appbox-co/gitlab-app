@@ -1,0 +1,46 @@
+#!/bin/bash
+# =============================================================================
+# appbox-post-reconfigure: runs after `gitlab-ctl reconfigure`
+# =============================================================================
+#
+# /assets/init-container runs this through GITLAB_POST_RECONFIGURE_SCRIPT,
+# after GitLab has been installed or upgraded (and, at an upgrade stop that
+# needs it, after the PostgreSQL upgrade). init-container uses `set -e`, so a
+# non-zero exit here stops the container and Docker starts it again.
+#
+# On a fresh install it confirms that the administrator from the install
+# fields exists and signs in with GITLAB_ROOT_PASSWORD. If that cannot be
+# confirmed it fails closed: GitLab is stopped, nothing is marked done, no
+# callback is sent, and the next start tries again.
+#
+# Never traced: the environment holds the administrator password.
+{ set +x; } 2>/dev/null
+set -u
+
+ADMIN_PENDING=/etc/gitlab/.appbox-admin-pending
+ADMIN_CONFIRMED=/etc/gitlab/.appbox-admin-confirmed
+CALLBACK_PENDING=/etc/appbox_callback_pending
+
+fail_closed() {
+    echo "[appbox] $1" >&2
+    echo "[appbox] Stopping GitLab. The next start of this container tries again." >&2
+    gitlab-ctl stop >/dev/null 2>&1 || true
+    exit 1
+}
+
+if [[ -f "${ADMIN_PENDING}" && ! -f "${ADMIN_CONFIRMED}" ]]; then
+    echo "[appbox] Confirming the GitLab administrator account"
+    if gitlab-rails runner /scripts/appbox-admin-check.rb; then
+        touch "${ADMIN_CONFIRMED}"
+        rm -f "${ADMIN_PENDING}"
+    else
+        fail_closed "The administrator account from the install settings could not be confirmed."
+    fi
+fi
+
+if [[ -f "${CALLBACK_PENDING}" ]]; then
+    # In the background: init-container must go on to tail the logs and wait.
+    /scripts/appbox-send-callback </dev/null &
+fi
+
+exit 0
