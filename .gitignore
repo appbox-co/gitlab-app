@@ -1,0 +1,4 @@
+.DS_Store
+.vscode/
+# A local copy of a production gitlab.rb. It holds credentials; never commit it.
+cylo-gitlab.conf
