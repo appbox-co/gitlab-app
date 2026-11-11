@@ -91,7 +91,9 @@ t_wait_healthy() {
     local name="$1" deadline=$((SECONDS + $2))
     while ((SECONDS < deadline)); do
         t_running "${name}" || t_fail "${name} stopped (exit $(docker inspect -f '{{.State.ExitCode}}' "${name}"))"
-        if docker exec "${name}" /opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10 >/dev/null 2>&1; then
+        # From GitLab 19.2, gitlab-healthcheck exits 0 until reconfigure has
+        # written its settings file, so require the file too.
+        if docker exec "${name}" sh -c 'test -f /opt/gitlab/etc/gitlab-healthcheck-rc && /opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10' >/dev/null 2>&1; then
             return 0
         fi
         sleep 15
