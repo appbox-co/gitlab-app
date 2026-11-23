@@ -5,8 +5,9 @@
 #
 # Installs <base-image> (the image customers run now), adds a project, an
 # issue and a commit, then:
-#   - starts the LAST image on that data and expects GitLab to refuse the
-#     skipped stops without changing anything;
+#   - with two or more stops, starts the LAST image on that data and expects
+#     GitLab to refuse the skipped stops without changing anything (with one
+#     stop nothing is skipped);
 #   - steps through every <stop-image> in order on the same volumes. At each
 #     stop it checks the GitLab version on disk, one installed callback, the
 #     owner's sign-in, the project data, and waits for GitLab's batched
@@ -88,18 +89,22 @@ docker stop -t 120 "${T_PREFIX}-c0" >/dev/null
 docker rm -v "${T_PREFIX}-c0" >/dev/null
 
 # --- Skipped stops are refused ----------------------------------------------
-t_env_file "${T_TMP}/skip.env" 425099 "${password}"
-t_run "${T_PREFIX}-skip" chain "${last}" "${T_TMP}/skip.env"
-code="$(t_wait_exit "${T_PREFIX}-skip" 600)"
-[[ "${code}" != "0" ]] || t_fail "the last image accepted ${base_version} data"
-docker logs "${T_PREFIX}-skip" 2>&1 | grep -q 'It is required to upgrade to the latest' \
-    || t_fail "the last image stopped for another reason than the upgrade check"
-after="$(docker run --rm --label "${T_LABEL}" -v "${T_PREFIX}-chain-opt:/var/opt/gitlab:ro" \
-    --entrypoint cat "${last}" /var/opt/gitlab/gitlab-rails/VERSION)"
-[[ "${after}" == "${base_version}" ]] || t_fail "the refused start changed the data version to ${after}"
-[[ "$(t_callbacks 425099)" == "0" ]] || t_fail "the refused start sent a callback"
-docker rm -v "${T_PREFIX}-skip" >/dev/null
-t_log "skip: ${last} refused ${base_version} data and changed nothing"
+if (( ${#stops[@]} > 1 )); then
+    t_env_file "${T_TMP}/skip.env" 425099 "${password}"
+    t_run "${T_PREFIX}-skip" chain "${last}" "${T_TMP}/skip.env"
+    code="$(t_wait_exit "${T_PREFIX}-skip" 600)"
+    [[ "${code}" != "0" ]] || t_fail "the last image accepted ${base_version} data"
+    docker logs "${T_PREFIX}-skip" 2>&1 | grep -q 'It is required to upgrade to the latest' \
+        || t_fail "the last image stopped for another reason than the upgrade check"
+    after="$(docker run --rm --label "${T_LABEL}" -v "${T_PREFIX}-chain-opt:/var/opt/gitlab:ro" \
+        --entrypoint cat "${last}" /var/opt/gitlab/gitlab-rails/VERSION)"
+    [[ "${after}" == "${base_version}" ]] || t_fail "the refused start changed the data version to ${after}"
+    [[ "$(t_callbacks 425099)" == "0" ]] || t_fail "the refused start sent a callback"
+    docker rm -v "${T_PREFIX}-skip" >/dev/null
+    t_log "skip: ${last} refused ${base_version} data and changed nothing"
+else
+    t_log "skip: one stop, nothing to refuse"
+fi
 
 # --- Stops ----------------------------------------------------------------
 i=0
