@@ -37,6 +37,7 @@ PostgreSQL from 16 to 17 on its first start.
 | 18.11.14-ce.0 | 18.8 or later |
 | 19.2.10-ce.0 | 18.11 or later |
 | 19.5.4-ce.0 | 19.2 or later |
+| 19.6.1-ce.0 | 19.5 or later |
 
 ## Releasing
 
